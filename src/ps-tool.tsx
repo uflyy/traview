@@ -51,27 +51,41 @@ interface BaseData {
 }
 
 const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length && payload[0].payload) {
-    const d = payload[0].payload;
-    return (
-      <div className="bg-zinc-950/95 border border-zinc-800 px-3 py-2 rounded-xl shadow-2xl text-zinc-100">
-        <p
-          className="font-extrabold text-zinc-400 uppercase tracking-widest mb-1"
-          style={{ fontSize: TOOLTIP_LABEL_PX }}
-        >
-          {d.label}
-        </p>
-        <p className="text-[#9D2235] text-2xl font-black leading-none">
-          {(d.value || 0).toFixed(3)}
-        </p>
-        <p className="text-zinc-400 font-bold mt-1" style={{ fontSize: TOOLTIP_N_PX }}>
-          SAMPLE N = {d.n || 0}
-        </p>
-      </div>
-    );
-  }
-  return null;
+  if (!active || !payload || !payload.length) return null;
+
+  const row = payload[0]?.payload || {};
+  // Recharts 会把当前 bar 的数值放在 payload[0].value 里
+  const rawValue = payload[0]?.value;
+
+  // 兼容：大部分图用 value；Legislative 用 rating
+  const v =
+    Number.isFinite(rawValue) ? rawValue :
+    Number.isFinite(row.value) ? row.value :
+    Number.isFinite(row.rating) ? row.rating :
+    NaN;
+
+  const label = row.label ?? row.period ?? "";
+
+  return (
+    <div className="bg-zinc-950/95 border border-zinc-800 px-3 py-2 rounded-xl shadow-2xl text-zinc-100">
+      <p
+        className="font-extrabold text-zinc-400 uppercase tracking-widest mb-1"
+        style={{ fontSize: TOOLTIP_LABEL_PX }}
+      >
+        {label}
+      </p>
+
+      <p className="text-[#9D2235] text-2xl font-black leading-none">
+        {Number.isFinite(v) ? Number(v).toFixed(3) : "—"}
+      </p>
+
+      <p className="text-zinc-400 font-bold mt-1" style={{ fontSize: TOOLTIP_N_PX }}>
+        SAMPLE N = {row.n ?? 0}
+      </p>
+    </div>
+  );
 };
+
 
 function normalize(s: any) {
   return String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -98,14 +112,30 @@ const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  const [basemap, setBasemap] = useState<'dark' | 'light'>('dark');
+  // ✅ default = light
+  const [basemap, setBasemap] = useState<'dark' | 'light'>('light');
   const [showMore, setShowMore] = useState(false);
 
   const transformRow = (row: any, nameKey: string, idKey: string): BaseData => {
+    const toNum = (v: any) => {
+      if (v === null || v === undefined) return NaN;
+      // handle strings like "3,510" or " 3.51 "
+      const s = String(v).trim().replace(/,/g, "");
+      if (s === "" || s.toLowerCase() === "na" || s.toLowerCase() === "nan") return NaN;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : NaN;
+    };
+
+    const toInt = (v: any) => {
+      const n = toNum(v);
+      return Number.isFinite(n) ? Math.round(n) : 0;
+    };
+
     const law_comparison = [
-      { period: 'Pre-Law (12-1m)', rating: row.mean_m12_m1, n: row.n_m12_m1 },
-      { period: 'Post-Law (0-11m)', rating: row.mean_0_11, n: row.n_0_11 }
-    ].filter(d => d.rating !== null && !isNaN(d.rating));
+      { period: 'Pre-Law (12-1m)', rating: toNum(row.mean_m12_m1), n: toInt(row.n_m12_m1) },
+      { period: 'Post-Law (0-11m)', rating: toNum(row.mean_0_11), n: toInt(row.n_0_11) }
+    ].filter(d => Number.isFinite(d.rating) && d.n > 0);
+
 
     return {
       id: String(row[idKey] || ""),
@@ -162,7 +192,7 @@ const Dashboard = () => {
     });
   }, []);
 
-  // When switching view, reset selection to the correct default (and collapse More)
+  // When switching view, reset selection to correct default and collapse More
   useEffect(() => {
     if (loading) return;
     setShowMore(false);
@@ -207,6 +237,7 @@ const Dashboard = () => {
 
   const stateFill = basemap === 'dark' ? "#151515" : "#f3f4f6";
   const stateStroke = basemap === 'dark' ? "#2a2a2a" : "#cbd5e1";
+
   const msaEmptyFill = basemap === 'dark' ? "#1a1a1a" : "#e5e7eb";
   const msaStroke = basemap === 'dark' ? "#2b2b2b" : "#cbd5e1";
 
@@ -232,7 +263,7 @@ const Dashboard = () => {
             <div className="w-10 h-10 bg-[#9D2235] flex items-center justify-center rounded text-white font-black text-xl">T</div>
             <div className="leading-tight">
               <h1 className="text-[#9D2235] font-black tracking-tight uppercase" style={{ fontSize: HEADER_TITLE_PX }}>
-                PS-SAT: Predictive Scheduling & Satisfaction Analytics Tool
+                PS-SAT
               </h1>
               <p className="text-zinc-600 font-semibold" style={{ fontSize: META_LABEL_PX }}>
                 Developed by Dr. Yang Yang, Temple University,&nbsp;
@@ -259,7 +290,6 @@ const Dashboard = () => {
             <button
               onClick={() => {
                 setView('msa');
-                // force default MSA immediately when switching
                 const def = findDefaultMsa(msaData);
                 if (def) setSelectedItem(def);
               }}
@@ -349,42 +379,66 @@ const Dashboard = () => {
           <ComposableMap projection="geoAlbersUsa" className="w-full h-full relative">
             <ZoomableGroup zoom={1}>
               {view === 'msa' ? (
-                <Geographies geography={msaGeoUrl}>
-                  {({ geographies }: { geographies: any[] }) =>
-                    geographies?.map((geo) => {
-                      const msaId = String(geo.properties?.GEOID || geo.properties?.geoid || geo.id || "").replace(/^0+/, "").trim();
-                      const msaMatch = msaData.find(m => String(m.id).replace(/^0+/, "").trim() === msaId);
-                      const isSelected = selectedItem?.id && String(selectedItem.id).replace(/^0+/, "").trim() === msaId;
-
-                      const opacity = msaMatch ? (0.10 + (msaMatch.sample_size / maxMsaN) * 0.70) : 0.05;
-
-                      // In light mode, keep the cherry but strengthen boundary contrast
-                      const selectedFill = basemap === 'dark' ? "#f5f5f5" : "#111827";
-                      const selectedStroke = basemap === 'dark' ? "#ffffff" : "#111827";
-
-                      return (
+                <>
+                  {/* ✅ State boundaries behind MSA layer */}
+                  <Geographies geography={stateGeoUrl}>
+                    {({ geographies }: { geographies: any[] }) =>
+                      geographies.map(geo => (
                         <Geography
                           key={geo.rsmKey}
                           geography={geo}
-                          onClick={() => msaMatch && setSelectedItem(msaMatch)}
-                          fill={msaMatch ? (isSelected ? selectedFill : TEMPLE_CHERRY) : msaEmptyFill}
-                          fillOpacity={msaMatch ? (isSelected ? 1 : opacity) : 1}
-                          stroke={isSelected ? selectedStroke : msaStroke}
-                          strokeWidth={isSelected ? 1.2 : 0.45}
+                          fill={stateFill}
+                          stroke={stateStroke}
+                          strokeWidth={0.7}
                           style={{
                             default: { outline: "none" },
-                            hover: {
-                              fillOpacity: msaMatch ? 0.95 : 1,
-                              fill: msaMatch ? TEMPLE_CHERRY : msaEmptyFill,
-                              cursor: msaMatch ? "pointer" : "default",
-                              outline: "none"
-                            }
+                            hover: { outline: "none" },
+                            pressed: { outline: "none" }
                           }}
                         />
-                      );
-                    })
-                  }
-                </Geographies>
+                      ))
+                    }
+                  </Geographies>
+
+                  {/* MSA layer */}
+                  <Geographies geography={msaGeoUrl}>
+                    {({ geographies }: { geographies: any[] }) =>
+                      geographies?.map((geo) => {
+                        const msaId = String(geo.properties?.GEOID || geo.properties?.geoid || geo.id || "")
+                          .replace(/^0+/, "")
+                          .trim();
+                        const msaMatch = msaData.find(m => String(m.id).replace(/^0+/, "").trim() === msaId);
+                        const isSelected = selectedItem?.id && String(selectedItem.id).replace(/^0+/, "").trim() === msaId;
+
+                        const opacity = msaMatch ? (0.10 + (msaMatch.sample_size / maxMsaN) * 0.70) : 0.05;
+
+                        const selectedFill = basemap === 'dark' ? "#f5f5f5" : "#111827";
+                        const selectedStroke = basemap === 'dark' ? "#ffffff" : "#111827";
+
+                        return (
+                          <Geography
+                            key={geo.rsmKey}
+                            geography={geo}
+                            onClick={() => msaMatch && setSelectedItem(msaMatch)}
+                            fill={msaMatch ? (isSelected ? selectedFill : TEMPLE_CHERRY) : msaEmptyFill}
+                            fillOpacity={msaMatch ? (isSelected ? 1 : opacity) : 1}
+                            stroke={isSelected ? selectedStroke : msaStroke}
+                            strokeWidth={isSelected ? 1.2 : 0.45}
+                            style={{
+                              default: { outline: "none" },
+                              hover: {
+                                fillOpacity: msaMatch ? 0.95 : 1,
+                                fill: msaMatch ? TEMPLE_CHERRY : msaEmptyFill,
+                                cursor: msaMatch ? "pointer" : "default",
+                                outline: "none"
+                              }
+                            }}
+                          />
+                        );
+                      })
+                    }
+                  </Geographies>
+                </>
               ) : (
                 <>
                   <Geographies geography={stateGeoUrl}>
@@ -430,12 +484,7 @@ const Dashboard = () => {
           {/* Smaller label card, bottom-left */}
           {selectedItem && (
             <div className="absolute bottom-5 left-5 pointer-events-none">
-              <div className={`backdrop-blur px-4 py-3 rounded-2xl shadow-xl border max-w-[380px]
-                ${basemap === 'dark'
-                  ? "bg-white/92 border-zinc-200 text-zinc-900"
-                  : "bg-white/92 border-zinc-200 text-zinc-900"
-                }`}
-              >
+              <div className="backdrop-blur px-4 py-3 rounded-2xl shadow-xl border max-w-[380px] bg-white/92 border-zinc-200 text-zinc-900">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="font-black uppercase flex items-center gap-2 truncate" style={{ fontSize: 12 }}>
                     {selectedItem.hasLaw && <ShieldCheck size={14} className="text-[#9D2235]" />}
@@ -457,7 +506,7 @@ const Dashboard = () => {
                   </div>
                   <div className="rounded-xl bg-zinc-50 px-3 py-2 border border-zinc-200">
                     <p className="text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
-                      Sample Size
+                      Population
                     </p>
                     <p className="font-black text-xl leading-none mt-1">
                       {selectedItem.sample_size || 0}
