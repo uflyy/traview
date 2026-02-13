@@ -1,0 +1,10 @@
+<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <title>Y Squared Logo - Badge</title>
+  <rect x="0" y="0" width="100" height="100" rx="20" fill="#9D2235" />
+  
+  <g fill="#FFFFFF" font-family="'Times New Roman', Times, serif" font-weight="bold" text-anchor="middle">
+    <text x="50" y="70" font-size="65">
+      Y<tspan font-size="35" dy="-25">2</tspan>
+    </text>
+  </g>
+</svg>
