@@ -263,7 +263,7 @@ const Dashboard = () => {
             <div className="w-10 h-10 bg-[#9D2235] flex items-center justify-center rounded text-white font-black text-xl">T</div>
             <div className="leading-tight">
               <h1 className="text-[#9D2235] font-black tracking-tight uppercase" style={{ fontSize: HEADER_TITLE_PX }}>
-                PS-SAT
+                Predictive Scheduling & Satisfaction Analytics Tool
               </h1>
               <p className="text-zinc-600 font-semibold" style={{ fontSize: META_LABEL_PX }}>
                 Developed by Dr. Yang Yang, Temple University,&nbsp;
@@ -506,7 +506,7 @@ const Dashboard = () => {
                   </div>
                   <div className="rounded-xl bg-zinc-50 px-3 py-2 border border-zinc-200">
                     <p className="text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
-                      Population
+                      Sample Size
                     </p>
                     <p className="font-black text-xl leading-none mt-1">
                       {selectedItem.sample_size || 0}
