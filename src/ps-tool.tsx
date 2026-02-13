@@ -268,7 +268,7 @@ const Dashboard = () => {
               <p className="text-zinc-600 font-semibold" style={{ fontSize: META_LABEL_PX }}>
                 Developed by Dr. Yang Yang, Temple University,&nbsp;
                 <a
-                  href="https://dryangyang.com"
+                  href="https://sites.temple.edu/yangyang/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[#9D2235] underline underline-offset-2 hover:opacity-80"
