@@ -20,6 +20,8 @@ import {
   Camera,
   Link as LinkIcon,
 } from "lucide-react";
+import html2canvas from "html2canvas";
+import QRCode from "qrcode";
 
 /**
  * Tourism, Tenure & Tears (TTT)
@@ -371,7 +373,7 @@ function makeEvents(): GameEvent[] {
 const DICT: Record<Lang, Record<string, string>> = {
   zh: {
     title: "TOURISM, TENURE & TEARS",
-    subtitle: "青年学者梗模拟器",
+    subtitle: "学术生存模拟器",
     horse: "🐴 马年快乐", 
     site: "www.dryangyang.com",
     guide: "使用说明",
@@ -482,6 +484,25 @@ const DICT: Record<Lang, Record<string, string>> = {
     persona3: "🏫 教学英雄",
     persona4: "🧂 咸味现实主义者",
     persona5: "🦄 稀有独角兽",
+    selectWeeks: "选择游戏周数",
+    weeksOption: "周",
+    username: "用户名（可选）",
+    usernamePlaceholder: "输入你的名字",
+    includeUsername: "在截图中显示用户名",
+    generateScreenshot: "生成截图",
+    downloadImage: "下载图片",
+    shareVia: "分享到",
+    copyLink: "复制分享链接",
+    shareWeChat: "微信分享",
+    shareXiaohongshu: "小红书分享",
+    shareWeibo: "微博分享",
+    shareInstagram: "Instagram 分享",
+    shareTwitter: "Twitter 分享",
+    weChat: "微信",
+    xiaohongshu: "小红书",
+    weibo: "微博",
+    instagram: "Instagram",
+    twitter: "Twitter",
   },
   en: {
     title: "TOURISM, TENURE & TEARS",
@@ -596,6 +617,25 @@ const DICT: Record<Lang, Record<string, string>> = {
     persona3: "🏫 Teaching Hero",
     persona4: "🧂 Salty Realist",
     persona5: "🦄 Rare Unicorn",
+    selectWeeks: "Select total weeks",
+    weeksOption: "weeks",
+    username: "Username (optional)",
+    usernamePlaceholder: "Enter your name",
+    includeUsername: "Include username in screenshot",
+    generateScreenshot: "Generate Screenshot",
+    downloadImage: "Download Image",
+    shareVia: "Share via",
+    copyLink: "Copy share link",
+    shareWeChat: "Share to WeChat",
+    shareXiaohongshu: "Share to Xiaohongshu",
+    shareWeibo: "Share to Weibo",
+    shareInstagram: "Share to Instagram",
+    shareTwitter: "Share to Twitter",
+    weChat: "WeChat",
+    xiaohongshu: "Xiaohongshu",
+    weibo: "Weibo",
+    instagram: "Instagram",
+    twitter: "Twitter",
   },
 };
 
@@ -633,7 +673,7 @@ export default function TTTGame() {
   const apMax = DIFF_AP[difficulty];
 
   const [week, setWeek] = useState<number>(loaded?.week ?? 1);
-  const totalWeeks = 12;
+  const [totalWeeks, setTotalWeeks] = useState<number>(loaded?.totalWeeks ?? 12);
 
   const [ap, setAp] = useState<number>(() => {
     const v = typeof loaded?.ap === "number" ? loaded.ap : apMax;
@@ -663,6 +703,9 @@ export default function TTTGame() {
 
   const [endModal, setEndModal] = useState<boolean>(loaded?.endModal ?? false);
   const [screenshotMode, setScreenshotMode] = useState<boolean>(false);
+  const [username, setUsername] = useState<string>(loaded?.username ?? "");
+  const [includeNameInShot, setIncludeNameInShot] = useState<boolean>(loaded?.includeNameInShot ?? true);
+  const [shotDataUrl, setShotDataUrl] = useState<string | null>(null);
 
   const activePaper = useMemo(() => papers.find((p) => p.id === activeId) ?? papers[0], [papers, activeId]);
   const eff = useMemo(() => computeEfficiency(resources), [resources]);
@@ -716,6 +759,9 @@ export default function TTTGame() {
         SAVE_KEY,
         JSON.stringify({
           week,
+          totalWeeks,
+          username,
+          includeNameInShot,
           ap,
           lang,
           theme,
@@ -730,7 +776,7 @@ export default function TTTGame() {
     } catch {
       // ignore
     }
-  }, [week, ap, lang, theme, difficulty, resources, papers, activeId, logs, endModal]);
+  }, [week, totalWeeks, username, includeNameInShot, ap, lang, theme, difficulty, resources, papers, activeId, logs, endModal]);
 
   // if difficulty changed, clamp AP so UI does not break
   useEffect(() => {
@@ -1067,59 +1113,177 @@ export default function TTTGame() {
     </div>
   );
 
-  // Screenshot overlay
+  const generateAndDownloadScreenshot = async () => {
+    const el = document.getElementById("screenshot-card");
+    if (!el) return;
+    try {
+      const canvas = await html2canvas(el, { backgroundColor: "#0b120b", scale: 2 });
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `ttt-result-${Date.now()}.png`;
+      link.click();
+    } catch (err) {
+      console.error("Screenshot failed:", err);
+    }
+  };
+
+  const generateShareableLink = () => {
+    const data = {
+      persona,
+      accepted: stats.accepted,
+      rejected: stats.rejected,
+      rr: stats.rr,
+      drafts: stats.drafts,
+      energy: Math.round(resources.energy),
+      mood: Math.round(resources.mood),
+      username: includeNameInShot ? username : "",
+    };
+    const encoded = btoa(JSON.stringify(data));
+    return `${window.location.origin}?result=${encoded}`;
+  };
+
+  const handleSharePlatform = (platform: string) => {
+    const url = generateShareableLink();
+    const title = `TOURISM, TENURE & TEARS - ${persona}`;
+    let shareUrl = "";
+
+    switch (platform) {
+      case "weChat":
+        // WeChat doesn't have direct share URL; generate QR code instead
+        QRCode.toDataURL(url).then((qrDataUrl) => {
+          const win = window.open("", "_blank");
+          if (win) {
+            win.document.write(
+              `<html><body style="text-align:center; padding: 40px;"><h2>Scan with WeChat</h2><img src="${qrDataUrl}" style="border: 2px solid #000; max-width: 400px;"/></body></html>`
+            );
+          }
+        });
+        return;
+      case "xiaohongshu":
+        alert(lang === "zh" ? "小红书内无法直接分享。请复制链接到小红书应用手动分享。" : "Manual sharing to Xiaohongshu recommended. Copy the link above.");
+        navigator.clipboard?.writeText(url);
+        break;
+      case "weibo":
+        shareUrl = `https://service.weibo.com/share/share.php?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
+        break;
+      case "instagram":
+        alert(lang === "zh" ? "Instagram内无法直接分享链接。请截图分享。" : "Instagram doesn't support direct link sharing. Please screenshot and share.");
+        break;
+      case "twitter":
+        shareUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`;
+        break;
+      default:
+        return;
+    }
+
+    if (shareUrl) {
+      window.open(shareUrl, "_blank", "width=600,height=400");
+    }
+  };
+
   const ScreenshotOverlay = () => (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-black">
-      <div className="w-full max-w-[860px] border-4 border-[#8ff08f] bg-[#0b120b] p-6 text-[#d7ffd7] shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-xs text-[#8ff08f] font-black">{DICT.en.title}</div>
-            <div className="text-lg font-black mt-1">{lang === "zh" ? "🐴 马年快乐" : "🐴 Happy Year of the Horse"}</div>
-            <div className="text-xs mt-1">{lang === "zh" ? "结果卡片（直接截屏分享）" : "Result card (take a screenshot and share)"}</div>
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-black overflow-y-auto">
+      <div className="w-full max-w-[900px]">
+        {/* Screenshot Card */}
+        <div
+          id="screenshot-card"
+          className="border-4 border-[#8ff08f] bg-[#0b120b] p-6 text-[#d7ffd7] shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] mb-6"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs text-[#8ff08f] font-black">{DICT.en.title}</div>
+              <div className="text-lg font-black mt-1">{lang === "zh" ? "🐴 马年快乐" : "🐴 Happy Year of the Horse"}</div>
+              <div className="text-xs mt-1">{lang === "zh" ? `周数: ${week}/${totalWeeks}` : `Weeks: ${week}/${totalWeeks}`}</div>
+              {includeNameInShot && username && (
+                <div className="text-sm font-black mt-2 text-[#8ff08f]">{username}</div>
+              )}
+            </div>
+            <a href={SITE_URL} target="_blank" rel="noreferrer" className="text-xs underline font-black text-[#8ff08f]">
+              {SITE_URL.replace("https://", "")}
+            </a>
           </div>
-          <a href={SITE_URL} target="_blank" rel="noreferrer" className="text-xs underline font-black text-[#8ff08f]">
-            {SITE_URL.replace("https://", "")}
-          </a>
+
+          <div className="mt-5 border-2 border-[#2d5b2d] bg-[#0f1b0f] p-5">
+            <div className="text-xs text-[#8ff08f] font-black">{lang === "zh" ? "你的学术人格" : "You are"}</div>
+            <div className="text-2xl font-black mt-1">{persona}</div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+              <div>Energy: <span className="font-black">{Math.round(resources.energy)}</span></div>
+              <div>Mood: <span className="font-black">{Math.round(resources.mood)}</span></div>
+              <div>Reputation: <span className="font-black">{Math.round(resources.reputation)}</span></div>
+              <div>Funding: <span className="font-black">{Math.round(resources.funding)}</span></div>
+            </div>
+
+            <div className="mt-4 text-sm border-t border-[#2d5b2d] pt-3">
+              <div className="flex gap-4 flex-wrap">
+                <span>{lang === "zh" ? "录用" : "Accepted"}: <b>{stats.accepted}</b></span>
+                <span>{lang === "zh" ? "拒稿" : "Rejected"}: <b>{stats.rejected}</b></span>
+                <span>R&R: <b>{stats.rr}</b></span>
+                <span>{lang === "zh" ? "草稿" : "Drafts"}: <b>{stats.drafts}</b></span>
+              </div>
+              <div className="mt-2 italic text-[#8ff08f]">
+                {lang === "zh" ? "你活下来了。系统并未承诺任何幸福。" : "You survived. The system did not promise happiness."}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-5 border-2 border-[#2d5b2d] bg-[#0f1b0f] p-5">
-          <div className="text-xs text-[#8ff08f] font-black">{lang === "zh" ? "你的学术人格" : "You are"}</div>
-          <div className="text-2xl font-black mt-1">{persona}</div>
-
-          <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-            <div>Energy: <span className="font-black">{Math.round(resources.energy)}</span></div>
-            <div>Mood: <span className="font-black">{Math.round(resources.mood)}</span></div>
-            <div>Reputation: <span className="font-black">{Math.round(resources.reputation)}</span></div>
-            <div>Funding: <span className="font-black">{Math.round(resources.funding)}</span></div>
+        {/* Controls */}
+        <div className={`border-4 border-[#8ff08f] bg-[#0b120b] p-6 text-[#d7ffd7]`}>
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <label className="flex items-center gap-2 text-sm font-black">
+              <input
+                type="checkbox"
+                checked={includeNameInShot}
+                onChange={(e) => setIncludeNameInShot(e.target.checked)}
+                className="w-4 h-4 cursor-pointer"
+              />
+              {t.includeUsername}
+            </label>
           </div>
 
-          <div className="mt-4 text-sm border-t border-[#2d5b2d] pt-3">
-            <div className="flex gap-4 flex-wrap">
-              <span>{lang === "zh" ? "录用" : "Accepted"}: <b>{stats.accepted}</b></span>
-              <span>{lang === "zh" ? "拒稿" : "Rejected"}: <b>{stats.rejected}</b></span>
-              <span>R&R: <b>{stats.rr}</b></span>
-              <span>{lang === "zh" ? "草稿" : "Drafts"}: <b>{stats.drafts}</b></span>
-            </div>
-            <div className="mt-2 italic text-[#8ff08f]">
-              {lang === "zh" ? "你活下来了。系统并未承诺任何幸福。" : "You survived. The system did not promise happiness."}
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <button
+              onClick={generateAndDownloadScreenshot}
+              className="px-4 py-2 border-2 border-[#8ff08f] bg-[#0f1b0f] font-black hover:bg-[#1b2b1b]"
+            >
+              📥 {t.downloadImage}
+            </button>
+            <button
+              onClick={() => {
+                const text = {
+                  zh: `TOURISM, TENURE & TEARS\n${persona}\n录用:${stats.accepted} 拒稿:${stats.rejected} R&R:${stats.rr}\n${SITE_URL}`,
+                  en: `TOURISM, TENURE & TEARS\n${persona}\nAccepted:${stats.accepted} Rejected:${stats.rejected} R&R:${stats.rr}\n${SITE_URL}`,
+                };
+                navigator.clipboard?.writeText(text[lang]);
+              }}
+              className="px-4 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] font-black hover:bg-[#1b2b1b]"
+            >
+              📋 {t.copyText}
+            </button>
           </div>
-        </div>
 
-        <div className="mt-5 flex gap-3 flex-wrap">
-          <button onClick={() => setScreenshotMode(false)} className="px-4 py-2 border-2 border-[#8ff08f] font-black">
-            {t.exitShot}
-          </button>
-          <button
-            onClick={() => {
-              const text =
-                `TOURISM, TENURE & TEARS\n${persona}\nAccepted:${stats.accepted} Rejected:${stats.rejected} R&R:${stats.rr}\n${SITE_URL}`;
-              navigator.clipboard?.writeText(text);
-            }}
-            className="px-4 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] font-black"
-          >
-            {t.copyText}
-          </button>
+          <div className={`text-xs text-[#8ff08f] font-black mb-2`}>{t.shareVia}</div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+            {["weChat", "xiaohongshu", "weibo", "instagram", "twitter"].map((platform) => (
+              <button
+                key={platform}
+                onClick={() => handleSharePlatform(platform)}
+                className="px-2 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] text-[10px] font-black hover:bg-[#1b2b1b]"
+              >
+                {t[platform as keyof typeof t] || platform}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-3 flex-wrap pt-4 border-t border-[#2d5b2d]">
+            <button
+              onClick={() => setScreenshotMode(false)}
+              className="px-4 py-2 border-2 border-[#8ff08f] bg-[#0f1b0f] font-black hover:bg-[#1b2b1b]"
+            >
+              {t.exitShot}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1185,6 +1349,27 @@ export default function TTTGame() {
           >
             <Languages size={12} /> {lang === "zh" ? "EN" : "中文"}
           </button>
+
+          <select
+            value={totalWeeks}
+            onChange={(e) => setTotalWeeks(parseInt(e.target.value, 10))}
+            className={`px-2 py-1 text-[10px] border-2 font-black outline-none ${themeShell.panel2}`}
+            title={t.selectWeeks}
+          >
+            <option value={12}>12 {t.weeksOption}</option>
+            <option value={24}>24 {t.weeksOption}</option>
+            <option value={52}>52 {t.weeksOption}</option>
+          </select>
+
+          <input
+            type="text"
+            placeholder={t.usernamePlaceholder}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className={`px-2 py-1 text-[10px] border-2 font-black outline-none flex-1 min-w-[100px] ${themeShell.panel2}`}
+            title={t.username}
+            maxLength={30}
+          />
         </div>
       </div>
 
