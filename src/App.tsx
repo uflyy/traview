@@ -1,10 +1,10 @@
-import Dashboard from './ps-tool' // 引入你刚才写好的组件
+import TTT from './ttt-game' // 引入你刚才写好的组件
 
 function App() {
   return (
     // 这里的 w-full h-screen 保证全屏显示
     <div className="w-full h-screen">
-      <Dashboard />
+      <TTT />
     </div>
   )
 }
