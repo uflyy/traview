@@ -24,7 +24,7 @@ import {
 /**
  * Tourism, Tenure & Tears (TTT)
  * Satire simulator, Gameboy edition
- * - Multi-paper pipeline (max 3)
+ * - Multi-paper pipeline (max 5)
  * - Reviewer + revise points + shortened review cycle
  * - More frequent random events
  * - Rejection can resubmit
@@ -111,7 +111,7 @@ const uid = () => `p_${Math.random().toString(16).slice(2)}_${Date.now().toStrin
 
 const DIFF_AP: Record<Difficulty, number> = { low: 7, mid: 5, high: 3 };
 
-const GUIDE_ZH = "/guide/zh.html";
+const GUIDE_ZH = "manual.pdf";
 const GUIDE_EN = "/guide/en.html";
 const SITE_URL = "https://sites.temple.edu/yangyang";
 
@@ -265,10 +265,10 @@ function genReview(tier: Tier, round: 1 | 2, rep: number, quality: number) {
     return { reviewerType: r.type, severity: sev, text: pick(r.pool), points };
   });
 
-  // OLD: Q1 4-7, Q2 3-6, Q3 2-5
-  // NEW: minus 1 week across tiers, clamp to >= 1, then add small adjustments
-  const baseEta = tier === "Q1" ? rint(2, 4) : tier === "Q2" ? rint(2, 3) : rint(1, 3);
-  const etaWeeks = clamp(baseEta + (round === 2 ? 1 : 0) + (rep < 15 ? 1 : 0), 1, 8);
+  // Shorter review times: reduce base ranges and remove extra +1 for round-2.
+  // Cap ETA to at most 2 weeks to keep average turnaround <= 2.
+  const baseEta = tier === "Q1" ? rint(1, 3) : tier === "Q2" ? rint(1, 2) : rint(1, 2);
+  const etaWeeks = clamp(baseEta + (rep < 15 ? 1 : 0), 1, 2);
 
   const pointsTotal = clamp(
     comments.reduce((s, c) => s + c.points, 0),
@@ -487,7 +487,6 @@ const DICT: Record<Lang, Record<string, string>> = {
     title: "TOURISM, TENURE & TEARS",
     subtitle: "Early-Career Satire Simulator",
     horse: "🐴 Happy Year of the Horse",
-    madeBy: "Built by Dr. Yang Yang",
     site: "www.dryangyang.com",
     guide: "User Guide",
     week: "Week",
@@ -840,25 +839,29 @@ export default function TTTGame() {
       return;
     }
 
-    const base = rint(10, 18);
-    const energyBonus = resources.energy >= 55 ? 4 : resources.energy >= 35 ? 2 : 0;
+    const base = rint(60, 100);
+    const energyBonus = resources.energy >= 55 ? 6 : resources.energy >= 35 ? 3 : 0;
     const moodPenalty = resources.mood < 25 ? 3 : resources.mood < 40 ? 1 : 0;
-    const reduction = clamp(base + energyBonus - moodPenalty, 6, 24);
+    const reputationBonus = Math.floor(resources.reputation / 30); // small bonus for higher rep
+    // increase max reduction so revise completes faster per action
+    const reduction = clamp(base + energyBonus + reputationBonus - moodPenalty, 12, 80);
 
-    updateRes({ energy: -14, mood: -5, teaching: +2 });
+    updateRes({ energy: -16, mood: -6, teaching: +2 });
 
     mutatePaper(activePaper.id, (p) => {
       if (!p.review) return p;
       const left = clamp(p.review.revisePointsLeft - reduction, 0, 999);
       if (left === 0) {
-        const newQuality = clamp(p.quality + rint(4, 8), 0, 100);
+        const newQuality = clamp(p.quality + rint(10, 20), 0, 100);
         const pkg = genReview(p.tier, 2, resources.reputation, newQuality);
+        // shorten round-2 ETA to speed up the revise turnaround
+        const fastEta = Math.max(1, Math.round(pkg.etaWeeks * 0.6));
         addLog(t.logReviseDone);
         return {
           ...p,
           quality: newQuality,
           status: "Under Review",
-          review: { round: 2, etaWeeks: pkg.etaWeeks, comments: pkg.comments, revisePointsLeft: pkg.pointsTotal },
+          review: { round: 2, etaWeeks: fastEta, comments: pkg.comments, revisePointsLeft: pkg.pointsTotal },
         };
       }
       addLog(`${t.logRevise} -${reduction}, left ${left}`);
