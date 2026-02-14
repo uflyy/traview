@@ -706,6 +706,8 @@ export default function TTTGame() {
   const [username, setUsername] = useState<string>(loaded?.username ?? "");
   const [includeNameInShot, setIncludeNameInShot] = useState<boolean>(loaded?.includeNameInShot ?? true);
   const [shotDataUrl, setShotDataUrl] = useState<string | null>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
 
   const activePaper = useMemo(() => papers.find((p) => p.id === activeId) ?? papers[0], [papers, activeId]);
   const eff = useMemo(() => computeEfficiency(resources), [resources]);
@@ -1138,48 +1140,122 @@ export default function TTTGame() {
       mood: Math.round(resources.mood),
       username: includeNameInShot ? username : "",
     };
-    const encoded = btoa(JSON.stringify(data));
+    const jsonString = JSON.stringify(data);
+    // Convert to UTF-8 bytes and then base64 encode
+    const utf8Bytes = new TextEncoder().encode(jsonString);
+    const binaryString = Array.from(utf8Bytes)
+      .map((byte) => String.fromCharCode(byte))
+      .join("");
+    const encoded = btoa(binaryString);
     return `${window.location.origin}?result=${encoded}`;
   };
 
   const handleSharePlatform = (platform: string) => {
-    const url = generateShareableLink();
-    const title = `TOURISM, TENURE & TEARS - ${persona}`;
-    let shareUrl = "";
+    try {
+      console.log("Share clicked:", platform);
+      const url = generateShareableLink();
+      console.log("Generated link:", url);
+      const title = `TOURISM, TENURE & TEARS - ${persona}`;
+      let shareUrl = "";
 
-    switch (platform) {
-      case "weChat":
-        // WeChat doesn't have direct share URL; generate QR code instead
-        QRCode.toDataURL(url).then((qrDataUrl) => {
-          const win = window.open("", "_blank");
-          if (win) {
-            win.document.write(
-              `<html><body style="text-align:center; padding: 40px;"><h2>Scan with WeChat</h2><img src="${qrDataUrl}" style="border: 2px solid #000; max-width: 400px;"/></body></html>`
-            );
-          }
-        });
-        return;
-      case "xiaohongshu":
-        alert(lang === "zh" ? "小红书内无法直接分享。请复制链接到小红书应用手动分享。" : "Manual sharing to Xiaohongshu recommended. Copy the link above.");
-        navigator.clipboard?.writeText(url);
-        break;
-      case "weibo":
-        shareUrl = `https://service.weibo.com/share/share.php?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
-        break;
-      case "instagram":
-        alert(lang === "zh" ? "Instagram内无法直接分享链接。请截图分享。" : "Instagram doesn't support direct link sharing. Please screenshot and share.");
-        break;
-      case "twitter":
-        shareUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`;
-        break;
-      default:
-        return;
-    }
+      switch (platform) {
+        case "weChat":
+          console.log("Generating QR code for:", url);
+          QRCode.toDataURL(url).then((qrDataUrl: string) => {
+            console.log("QR code generated successfully");
+            setQrCodeUrl(qrDataUrl);
+          }).catch((err) => {
+            console.error("QR code error:", err);
+            alert(lang === "zh" ? "二维码生成失败: " + String(err) : "QR code failed: " + String(err));
+          });
+          return;
+        case "xiaohongshu":
+          console.log("Setting share link for xiaohongshu");
+          setShareLink(url);
+          return;
+        case "weibo":
+          shareUrl = `https://service.weibo.com/share/share.php?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
+          console.log("Weibo URL:", shareUrl);
+          break;
+        case "instagram":
+          console.log("Setting share link for instagram");
+          setShareLink(url);
+          return;
+        case "twitter":
+          shareUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`;
+          console.log("Twitter URL:", shareUrl);
+          break;
+        default:
+          console.log("Unknown platform:", platform);
+          alert("Unknown platform: " + platform);
+          return;
+      }
 
-    if (shareUrl) {
-      window.open(shareUrl, "_blank", "width=600,height=400");
+      if (shareUrl) {
+        console.log("Opening share URL");
+        const win = window.open(shareUrl, "_blank", "width=600,height=400");
+        if (!win || win.closed || typeof win.closed === 'undefined') {
+          console.warn("Popup was blocked");
+          alert(lang === "zh" ? "弹窗被阻止，请手动复制链接分享" : "Popup blocked. Please share the link manually.");
+        }
+      }
+    } catch (err) {
+      console.error("handleSharePlatform error:", err);
+      alert("Error in share handler: " + String(err));
     }
   };
+
+  const QRCodeModal = () => (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/80">
+      <div className="border-4 border-[#8ff08f] bg-[#0b120b] p-8 text-[#d7ffd7] max-w-sm rounded">
+        <div className="text-center">
+          <div className="text-sm font-black text-[#8ff08f] mb-4">
+            {lang === "zh" ? "微信扫一扫" : "Scan with WeChat"}
+          </div>
+          {qrCodeUrl && (
+            <img src={qrCodeUrl} alt="QR Code" className="border-2 border-[#2d5b2d] p-2 mx-auto" />
+          )}
+          <button
+            onClick={() => setQrCodeUrl(null)}
+            className="mt-4 px-4 py-2 border-2 border-[#8ff08f] bg-[#0f1b0f] font-black hover:bg-[#1b2b1b] w-full"
+          >
+            {lang === "zh" ? "关闭" : "Close"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const ShareLinkModal = () => (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/80">
+      <div className="border-4 border-[#8ff08f] bg-[#0b120b] p-8 text-[#d7ffd7] max-w-sm rounded">
+        <div className="text-center">
+          <div className="text-sm font-black text-[#8ff08f] mb-4">
+            {lang === "zh" ? "复制分享链接" : "Copy share link"}
+          </div>
+          <div className="bg-[#0f1b0f] p-3 border-2 border-[#2d5b2d] mb-4 text-xs break-all font-mono rounded">
+            {shareLink}
+          </div>
+          <div className="flex gap-2 justify-center flex-col">
+            <button
+              onClick={() => {
+                shareLink && navigator.clipboard.writeText(shareLink);
+              }}
+              className="px-4 py-2 border-2 border-[#8ff08f] bg-[#0f1b0f] font-black hover:bg-[#1b2b1b] w-full"
+            >
+              📋 {lang === "zh" ? "复制链接" : "Copy Link"}
+            </button>
+            <button
+              onClick={() => setShareLink(null)}
+              className="px-4 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] font-black hover:bg-[#1b2b1b] w-full"
+            >
+              {lang === "zh" ? "关闭" : "Close"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   const ScreenshotOverlay = () => (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-black overflow-y-auto">
@@ -1222,7 +1298,7 @@ export default function TTTGame() {
                 <span>{lang === "zh" ? "草稿" : "Drafts"}: <b>{stats.drafts}</b></span>
               </div>
               <div className="mt-2 italic text-[#8ff08f]">
-                {lang === "zh" ? "你活下来了。系统并未承诺任何幸福。" : "You survived. The system did not promise happiness."}
+                {lang === "zh" ? "Paper 满格，身心健全，马年大吉" : "You survived. May the happiness be with you!"}
               </div>
             </div>
           </div>
@@ -1251,11 +1327,28 @@ export default function TTTGame() {
             </button>
             <button
               onClick={() => {
-                const text = {
-                  zh: `TOURISM, TENURE & TEARS\n${persona}\n录用:${stats.accepted} 拒稿:${stats.rejected} R&R:${stats.rr}\n${SITE_URL}`,
-                  en: `TOURISM, TENURE & TEARS\n${persona}\nAccepted:${stats.accepted} Rejected:${stats.rejected} R&R:${stats.rr}\n${SITE_URL}`,
-                };
-                navigator.clipboard?.writeText(text[lang]);
+                try {
+                  const text = {
+                    zh: `TOURISM, TENURE & TEARS\n${persona}\n录用:${stats.accepted} 拒稿:${stats.rejected} R&R:${stats.rr}\n${SITE_URL}`,
+                    en: `TOURISM, TENURE & TEARS\n${persona}\nAccepted:${stats.accepted} Rejected:${stats.rejected} R&R:${stats.rr}\n${SITE_URL}`,
+                  };
+                  console.log("Copy button clicked, attempting to copy:", text[lang]);
+                  if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text[lang]).then(() => {
+                      console.log("Copied successfully");
+                      alert(lang === "zh" ? "已复制" : "Copied!");
+                    }).catch((err) => {
+                      console.error("Copy failed:", err);
+                      alert(lang === "zh" ? "复制失败" : "Copy failed");
+                    });
+                  } else {
+                    console.warn("Clipboard API not available");
+                    alert(lang === "zh" ? "浏览器不支持" : "Clipboard not available");
+                  }
+                } catch (err) {
+                  console.error("Copy error:", err);
+                  alert(lang === "zh" ? "出错了: " + err : "Error: " + err);
+                }
               }}
               className="px-4 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] font-black hover:bg-[#1b2b1b]"
             >
@@ -1265,15 +1358,76 @@ export default function TTTGame() {
 
           <div className={`text-xs text-[#8ff08f] font-black mb-2`}>{t.shareVia}</div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-            {["weChat", "xiaohongshu", "weibo", "instagram", "twitter"].map((platform) => (
-              <button
-                key={platform}
-                onClick={() => handleSharePlatform(platform)}
-                className="px-2 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] text-[10px] font-black hover:bg-[#1b2b1b]"
-              >
-                {t[platform as keyof typeof t] || platform}
-              </button>
-            ))}
+            <button
+              onClick={() => {
+                try {
+                  console.log("WeChat button clicked");
+                  handleSharePlatform("weChat");
+                } catch (err) {
+                  console.error("WeChat share error:", err);
+                  alert("Error: " + String(err));
+                }
+              }}
+              className="px-2 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] text-[10px] font-black hover:bg-[#1b2b1b] cursor-pointer"
+            >
+              {t.weChat || "WeChat"}
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  console.log("Xiaohongshu button clicked");
+                  handleSharePlatform("xiaohongshu");
+                } catch (err) {
+                  console.error("Xiaohongshu share error:", err);
+                  alert("Error: " + String(err));
+                }
+              }}
+              className="px-2 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] text-[10px] font-black hover:bg-[#1b2b1b] cursor-pointer"
+            >
+              {t.xiaohongshu || "Xiaohongshu"}
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  console.log("Weibo button clicked");
+                  handleSharePlatform("weibo");
+                } catch (err) {
+                  console.error("Weibo share error:", err);
+                  alert("Error: " + String(err));
+                }
+              }}
+              className="px-2 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] text-[10px] font-black hover:bg-[#1b2b1b] cursor-pointer"
+            >
+              {t.weibo || "Weibo"}
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  console.log("Instagram button clicked");
+                  handleSharePlatform("instagram");
+                } catch (err) {
+                  console.error("Instagram share error:", err);
+                  alert("Error: " + String(err));
+                }
+              }}
+              className="px-2 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] text-[10px] font-black hover:bg-[#1b2b1b] cursor-pointer"
+            >
+              {t.instagram || "Instagram"}
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  console.log("Twitter button clicked");
+                  handleSharePlatform("twitter");
+                } catch (err) {
+                  console.error("Twitter share error:", err);
+                  alert("Error: " + String(err));
+                }
+              }}
+              className="px-2 py-2 border-2 border-[#2d5b2d] bg-[#0f1b0f] text-[10px] font-black hover:bg-[#1b2b1b] cursor-pointer"
+            >
+              {t.twitter || "Twitter"}
+            </button>
           </div>
 
           <div className="flex gap-3 flex-wrap pt-4 border-t border-[#2d5b2d]">
@@ -1292,6 +1446,8 @@ export default function TTTGame() {
   return (
     <div className={`min-h-screen font-mono p-4 md:p-8 flex flex-col gap-6 select-none ${themeShell.bg}`}>
       {screenshotMode && <ScreenshotOverlay />}
+      {qrCodeUrl && <QRCodeModal />}
+      {shareLink && <ShareLinkModal />}
 
       {/* Banner */}
       <div className={`border-2 p-3 flex items-center justify-between gap-3 ${themeShell.panel}`}>
