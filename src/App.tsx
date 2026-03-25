@@ -1,4 +1,4 @@
-import TTT from './ttt-game' // 引入你刚才写好的组件
+import TTT from './traview' // 引入你刚才写好的组件
 
 function App() {
   return (
