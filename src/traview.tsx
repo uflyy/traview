@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis,
@@ -6,14 +6,13 @@ import {
 } from 'recharts';
 import { 
   Layout, Database, TrendingUp, BarChart3,
-  ChevronRight, Globe, Mail, Menu, X, PieChart,
+  ChevronLeft, ChevronRight, Globe, Mail, Menu, X, PieChart,
   PlayCircle, MessageSquareText, BrainCircuit,
   Map as MapIcon, Network, TerminalSquare, MonitorCheck, Layers
 } from 'lucide-react';
 
 const SITE_URL = 'https://www.dryangyang.com';
 const pdfUrl = (name: string) => `${import.meta.env.BASE_URL}${name}`;
-const screenshotUrl = pdfUrl('traview.png');
 
 // ==========================================
 // 1. 全局翻译数据与文案配置
@@ -34,8 +33,15 @@ const translations = {
       title2: "分析与预测平台",
       desc: "打破原始数据与可发表洞见之间的壁垒。将统计推断、机器学习、文本挖掘与空间分析无缝整合于一个以数据表为中心的现代工作区。",
       download: "下载 Windows 版 (V1.0)",
-      screenshotAlt: "Traview 软件界面",
-      demo: "观看演示"
+      demo: "观看演示",
+      carousel: {
+        main: "主界面",
+        results: "结果窗口",
+        syntax: "语法窗口",
+        spatial: "空间分析",
+        prev: "上一张",
+        next: "下一张"
+      }
     },
     features: {
       tag: "全方位研究工具箱",
@@ -122,8 +128,15 @@ const translations = {
       title2: "Analytics Platform",
       desc: "Bridge the gap between raw data and publish-ready insights. Seamlessly integrating statistics, machine learning, text, and spatial analysis into one workspace.",
       download: "Download for Windows (V1.0)",
-      screenshotAlt: "Traview software",
-      demo: "Watch Demo"
+      demo: "Watch Demo",
+      carousel: {
+        main: "Main workspace",
+        results: "Results window",
+        syntax: "Syntax & log",
+        spatial: "Spatial analysis",
+        prev: "Previous slide",
+        next: "Next slide"
+      }
     },
     features: {
       tag: "Analytical Arsenal",
@@ -256,6 +269,107 @@ function PhilosophyCard({ icon, title, desc }) {
         </div>
         <h3 className="text-xl font-bold mb-4 text-slate-900">{title}</h3>
         <p className="text-slate-500 leading-relaxed text-[15px]">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+const HERO_SLIDE_FILES = [
+  { file: 'traview.png', labelKey: 'main' as const },
+  { file: 'result.png', labelKey: 'results' as const },
+  { file: 'syntax.png', labelKey: 'syntax' as const },
+  { file: 'spatial.png', labelKey: 'spatial' as const },
+];
+
+function HeroScreenshotCarousel({
+  carousel,
+}: {
+  carousel: {
+    main: string;
+    results: string;
+    syntax: string;
+    spatial: string;
+    prev: string;
+    next: string;
+  };
+}) {
+  const slides = useMemo(
+    () =>
+      HERO_SLIDE_FILES.map((s) => ({
+        file: s.file,
+        label: carousel[s.labelKey],
+      })),
+    [carousel]
+  );
+
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused) return;
+    const id = window.setInterval(() => {
+      setIndex((i) => (i + 1) % slides.length);
+    }, 4500);
+    return () => window.clearInterval(id);
+  }, [paused, slides.length]);
+
+  const go = (delta: number) => {
+    setIndex((i) => (i + delta + slides.length) % slides.length);
+  };
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <div className="relative min-h-[260px] sm:min-h-[320px] md:min-h-[380px] overflow-hidden rounded-lg border border-slate-800/80 bg-slate-900/90">
+        {slides.map((slide, i) => (
+          <img
+            key={slide.file}
+            src={pdfUrl(slide.file)}
+            alt={`Traview — ${slide.label}`}
+            className={`absolute inset-0 w-full h-full object-contain object-top p-2 sm:p-3 transition-opacity duration-700 ease-out ${
+              i === index ? 'opacity-100 z-[1]' : 'opacity-0 z-0 pointer-events-none'
+            }`}
+            draggable={false}
+          />
+        ))}
+        <button
+          type="button"
+          onClick={() => go(-1)}
+          aria-label={carousel.prev}
+          className="absolute left-2 top-1/2 z-[2] -translate-y-1/2 rounded-full bg-slate-950/70 p-2 text-white border border-slate-600/80 hover:bg-[#9E1B34]/90 hover:border-[#9E1B34] transition-colors shadow-lg backdrop-blur-sm"
+        >
+          <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+        <button
+          type="button"
+          onClick={() => go(1)}
+          aria-label={carousel.next}
+          className="absolute right-2 top-1/2 z-[2] -translate-y-1/2 rounded-full bg-slate-950/70 p-2 text-white border border-slate-600/80 hover:bg-[#9E1B34]/90 hover:border-[#9E1B34] transition-colors shadow-lg backdrop-blur-sm"
+        >
+          <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+      </div>
+      <p className="text-center text-sm font-medium text-slate-400 mt-3 tabular-nums" aria-live="polite">
+        {slides[index].label}
+        <span className="text-slate-600 ml-2 font-normal text-xs">
+          {index + 1}/{slides.length}
+        </span>
+      </p>
+      <div className="flex justify-center gap-2 mt-3">
+        {slides.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setIndex(i)}
+            aria-label={`${i + 1} / ${slides.length}`}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              i === index ? 'w-8 bg-[#9E1B34]' : 'w-2 bg-slate-600 hover:bg-slate-500'
+            }`}
+          />
+        ))}
       </div>
     </div>
   );
@@ -582,11 +696,7 @@ export default function App() {
                   <div className="ml-4 text-xs font-medium text-slate-500">Traview</div>
                 </div>
                 <div className="p-2 sm:p-4 bg-slate-950/50">
-                  <img
-                    src={screenshotUrl}
-                    alt={t.hero.screenshotAlt}
-                    className="w-full h-auto rounded-lg border border-slate-800/80 shadow-inner"
-                  />
+                  <HeroScreenshotCarousel carousel={t.hero.carousel} />
                 </div>
               </div>
             </div>
